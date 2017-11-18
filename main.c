@@ -1,3 +1,24 @@
+/*
+ * Copyright (c) 2017, Andrew Chen <andrew.chuanye.chen@gmail.com>
+ *
+ * This file is based on part of the libopencm3 project.
+ *
+ * Copyright (C) 2010 Gareth McMullin <gareth@blacksphere.co.nz>
+ *
+ * This library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <stdlib.h>
 
 #include <libopencm3/stm32/rcc.h>
@@ -187,6 +208,7 @@ static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
 				cdcacm_control_request);
 }
 
+// circular buffer for receiving from spi
 static uint8_t recv_buf[1024];
 static uint8_t head, tail;
 
@@ -228,11 +250,11 @@ static void clock_setup(void) {
 	rcc_periph_clock_enable(RCC_SPI1);
 }
 
-static void gpio_setup(void) {
-	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ,
-	              GPIO_CNF_OUTPUT_PUSHPULL, GPIO0);
-	gpio_set(GPIOB, GPIO0);
-}
+//static void gpio_setup(void) {
+//	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ,
+//	              GPIO_CNF_OUTPUT_PUSHPULL, GPIO0);
+//	gpio_set(GPIOB, GPIO0);
+//}
 
 static void spi_setup(void) {
 	// A5: SCLK
@@ -255,7 +277,7 @@ static void spi_setup(void) {
 
 int main(void) {
 	clock_setup();
-	gpio_setup();
+	//gpio_setup();
 	spi_setup();
 
 	usbd_device *usbd_dev;

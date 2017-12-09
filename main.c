@@ -23,6 +23,7 @@
 
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/exti.h>
 #include <libopencm3/stm32/spi.h>
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/usb/usbd.h>
@@ -172,7 +173,7 @@ static const char *usb_strings[] = {
 };
 
 /* Buffer to be used for control requests. */
-uint8_t usbd_control_buffer[128];
+static uint8_t usbd_control_buffer[128];
 
 static int cdcacm_control_request(usbd_device *usbd_dev, struct usb_setup_data *req, uint8_t **buf,
 		uint16_t *len, void (**complete)(usbd_device *usbd_dev, struct usb_setup_data *req)) {
@@ -208,7 +209,7 @@ static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
 				cdcacm_control_request);
 }
 
-// circular buffer for receiving from spi
+// circular buffer for receiving data from spi
 static uint8_t recv_buf[1024];
 static uint8_t head, tail;
 
@@ -237,30 +238,48 @@ void spi1_isr(void) {
 	if (SPI_SR(SPI1) & SPI_SR_RXNE) {
 		recv_buf[tail] = SPI_DR(SPI1);
 		tail = (tail + 1) % sizeof(recv_buf);
-		return;
 	}
+}
+
+static void spi_setup(void);
+
+// reset SPI event handler
+void exti3_isr(void) {
+	EXTI_PR = EXTI3; // clear pending flag
+
+	RCC_APB2RSTR = RCC_APB2RSTR_SPI1RST;
+	RCC_APB2RSTR = 0;
+
+	spi_setup();
 }
 
 static void clock_setup(void) {
 	rcc_clock_setup_in_hse_8mhz_out_72mhz();
 
 	rcc_periph_clock_enable(RCC_GPIOA);
-	rcc_periph_clock_enable(RCC_GPIOB);
 	rcc_periph_clock_enable(RCC_AFIO);
 	rcc_periph_clock_enable(RCC_SPI1);
 }
 
-//static void gpio_setup(void) {
-//	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ,
-//	              GPIO_CNF_OUTPUT_PUSHPULL, GPIO0);
-//	gpio_set(GPIOB, GPIO0);
-//}
+static void exti_setup(void) {
+	// A3: reset
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
+	              GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3);
+	gpio_clear(GPIOA, GPIO3); // pull down
+
+	nvic_enable_irq(NVIC_EXTI3_IRQ);
+
+	exti_set_trigger(EXTI3, EXTI_TRIGGER_RISING);
+	exti_select_source(EXTI3, GPIOA);
+	exti_enable_request(EXTI3);
+}
 
 static void spi_setup(void) {
 	// A5: SCLK
 	// A7: MOSI
 	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
-	              GPIO_CNF_INPUT_FLOAT, GPIO5 | GPIO7);
+	              GPIO_CNF_INPUT_PULL_UPDOWN, GPIO5 | GPIO7);
+	gpio_clear(GPIOA, GPIO5 | GPIO7); // pull down
 
 	nvic_enable_irq(NVIC_SPI1_IRQ);
 
@@ -277,7 +296,7 @@ static void spi_setup(void) {
 
 int main(void) {
 	clock_setup();
-	//gpio_setup();
+	exti_setup();
 	spi_setup();
 
 	usbd_device *usbd_dev;
